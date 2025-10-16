@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>4択クイズ</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --card: #111827;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --ok: #16a34a;
+        --ng: #dc2626;
+        --accent: #3b82f6;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, "Noto Sans JP", sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .card {
+        width: min(720px, 100%);
+        background: var(--card);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+        padding: 22px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 20px;
+      }
+      .desc {
+        margin: 0 0 16px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .question {
+        margin: 6px 0 14px;
+        font-size: 18px;
+        font-weight: 800;
+      }
+      .choices {
+        display: grid;
+        gap: 10px;
+      }
+      .choice {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .choice button {
+        all: unset;
+        display: block;
+        width: 100%;
+        padding: 14px;
+        cursor: pointer;
+      }
+      .choice:hover {
+        border-color: rgba(255, 255, 255, 0.28);
+      }
+      .choice.wrong {
+        border-color: rgba(220, 38, 38, 0.7);
+        background: rgba(220, 38, 38, 0.12);
+      }
+      .result {
+        margin-top: 14px;
+        padding: 12px;
+        border-radius: 12px;
+        display: none;
+      }
+      .result.ok {
+        background: rgba(22, 163, 74, 0.15);
+        border: 1px solid rgba(22, 163, 74, 0.45);
+      }
+      .result.ng {
+        background: rgba(220, 38, 38, 0.15);
+        border: 1px solid rgba(220, 38, 38, 0.45);
+      }
+      .kw {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 6px 10px;
+        border-radius: 10px;
+        background: rgba(59, 130, 246, 0.18);
+        border: 1px solid rgba(59, 130, 246, 0.45);
+        font-weight: 700;
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .btn {
+        appearance: none;
+        border: none;
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-weight: 700;
+        cursor: pointer;
+        color: white;
+        background: linear-gradient(
+          180deg,
+          rgba(59, 130, 246, 0.9),
+          rgba(59, 130, 246, 0.6)
+        );
+      }
+      .btn.alt {
+        background: linear-gradient(
+          180deg,
+          rgba(148, 163, 184, 0.35),
+          rgba(51, 65, 85, 0.35)
+        );
+      }
+      footer {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 12px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>4択クイズ</h1>
+      <p class="desc">正しいと思う選択肢を1つ選んでください。</p>
+
+      <div id="quiz">
+        <div id="qText" class="question"></div>
+        <div
+          id="choices"
+          class="choices"
+          role="group"
+          aria-labelledby="qText"
+        ></div>
+
+        <div id="resOK" class="result ok" role="status" aria-live="assertive">
+          <strong>🎉 正解！</strong>
+          <div id="keyword" class="kw" style="display: none"></div>
+        </div>
+        <div id="resNG" class="result ng" role="status" aria-live="assertive">
+          <strong>😵 残念…</strong> もう一度チャレンジ！
+        </div>
+
+        <div class="controls">
+          <button id="retryBtn" class="btn alt">リセット</button>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      /* ====== クイズ定義（ここを書き換えて使います） ====== */
+      const QUIZ_DATA = {
+        question:
+          "もんだい3<br>ぜんつうじし で いちばん キウイのしゅうかく が おおいきせつ は いつでしょう？",
+        choices: ["A. はる", "B. なつ", "C. あき", "D. ふゆ"],
+        correctIndex: 2, // 0始まり（Bが正解なら 1）
+        keywordOnCorrect: "か", // 正解時に表示するキーワード（不要なら "" に）
+      };
+      /* ===================================================== */
+
+      const $ = (id) => document.getElementById(id);
+      const qText = $("qText");
+      const choicesEl = $("choices");
+      const resOK = $("resOK");
+      const resNG = $("resNG");
+      const keyword = $("keyword");
+      const retryBtn = $("retryBtn");
+
+      let locked = false;
+
+      function renderQuiz() {
+        locked = false;
+        resOK.style.display = "none";
+        resNG.style.display = "none";
+        keyword.style.display = "none";
+        keyword.textContent = "";
+
+        qText.innerHTML = QUIZ_DATA.question;
+        choicesEl.innerHTML = "";
+
+        QUIZ_DATA.choices.forEach((text, idx) => {
+          const wrap = document.createElement("div");
+          wrap.className = "choice";
+          const btn = document.createElement("button");
+          btn.textContent = text;
+          btn.setAttribute("aria-label", `選択肢${idx + 1}: ${text}`);
+          btn.onclick = () => onChoose(idx, wrap);
+          wrap.appendChild(btn);
+          choicesEl.appendChild(wrap);
+        });
+      }
+
+      function onChoose(idx, wrap) {
+        if (locked) return;
+        locked = true;
+
+        const correct = idx === QUIZ_DATA.correctIndex;
+
+        // 全ボタンの状態更新
+        const items = Array.from(document.querySelectorAll(".choice"));
+        items.forEach((el, i) => {
+          el.classList.remove("correct", "wrong");
+          if (i === QUIZ_DATA.correctIndex) el.classList.add("correct");
+        });
+        if (!correct) wrap.classList.add("wrong");
+
+        // 結果表示
+        resOK.style.display = correct ? "block" : "none";
+        resNG.style.display = correct ? "none" : "block";
+
+        // 正解キーワード（任意）
+        if (correct && QUIZ_DATA.keywordOnCorrect) {
+          keyword.textContent = "キーワード：" + QUIZ_DATA.keywordOnCorrect;
+          keyword.style.display = "inline-block";
+        }
+      }
+
+      retryBtn.addEventListener("click", renderQuiz);
+
+      // 初期表示
+      renderQuiz();
+    </script>
+  </body>
+</html>
